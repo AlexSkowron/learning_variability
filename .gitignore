@@ -1,0 +1,6 @@
+/results/
+/plots/
+build/
+*.mat
+*.pyc
+*.so

@@ -59,6 +59,7 @@ class smc_object():
 				self.idx_blocks = np.asarray(info['blocks_idx'], dtype=np.intc)
 			else:
 				self.idx_blocks = np.zeros(len(self.actions)); self.idx_blocks[0] = 1.
+				self.idx_blocks = np.asarray(self.idx_blocks, dtype=np.intc) #added by Alex
 			if 'choices' in info.keys():
 				self.choices = np.asarray(info['choices'], dtype = np.intc)
 			else:
@@ -134,7 +135,7 @@ class smc_object():
 		self.traj_param = {'noise': noise, 'apply_rep': apply_rep, 'apply_weber': apply_weber, 'beta_softmax': beta_softmax, 'condition': condition}
 		if self.complete == 1:
 			if noise:
-				self.results     = smc2_2q_1alpha.smc2(self.actions, self.rewards, self.idx_blocks, self.choices, self.subj_idx, show_progress, apply_rep, apply_weber, beta_softmax, temperature, observational_noise)
+				self.results     = smc2_2q_1alpha.smc2(self.actions, self.rewards, self.idx_blocks, self.choices, self.subj_idx, show_progress, apply_rep, apply_weber, beta_softmax, temperature, observational_noise) 
 				self.param_names = ['alpha', 'beta_softmax', 'epsilon'] + ['rep_bias'] * apply_rep
 				self.idx_weights = -3
 				self.idx_samples = 0

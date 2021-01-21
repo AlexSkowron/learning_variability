@@ -310,14 +310,15 @@ def ibis(actions, rewards, choices, idx_blocks, subj_idx, apply_rep_bias, apply_
             plt.ylabel('ess')
 
             # modified here add the plot for k 
-            plt.subplot(3,2,6)
-            x = np.linspace(0.01,10.,5000)
-            plt.plot(x, norm.pdf(x, mean_k, std_k), 'k', linewidth=2); plt.hold(True)
-            plt.plot([mean_k, mean_k], plt.gca().get_ylim(), 'k', linewidth=2)
-            plt.hold(False)
-            plt.xlabel('scaling parameter for softmax 1/[0 1]')
-            plt.ylabel('pdf')
-
+            if apply_weber_decision_noise : # added by Alex
+                plt.subplot(3,2,6)
+                x = np.linspace(0.01,10.,5000)
+                plt.plot(x, norm.pdf(x, mean_k, std_k), 'k', linewidth=2); plt.hold(True)
+                plt.plot([mean_k, mean_k], plt.gca().get_ylim(), 'k', linewidth=2)
+                plt.hold(False)
+                plt.xlabel('scaling parameter for softmax 1/[0 1]')
+                plt.ylabel('pdf')
+                
             plt.draw()
             plt.show()
             plt.pause(0.05)
