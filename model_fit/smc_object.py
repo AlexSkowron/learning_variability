@@ -354,7 +354,7 @@ class smc_object():
 				self.simul_trajectories, self.actions_simul, self.rewards_simul = simulation.simulate_noiseless_rl(self.rewards, self.complete, self.idx_blocks, self.choices, forced_choices, sample, apply_rep, condition)		
 		self.got_simul = 1
 
-	def save_simulation(self, directory='simulations/', formats=['python']):
+	def save_simulation(self, directory='simulations/', sim='1', formats=['python', 'matlab']):
 		if not self.got_simul:
 			raise ValueError('No simulation was done')
 		d = {}
@@ -375,13 +375,15 @@ class smc_object():
 		for k in ['apply_weber', 'noise', 'apply_rep', 'condition']:
 			pram += str(self.traj_param[k])
 		pram += str(1*(self.traj_param['beta_softmax']==-1))
-		path  = 'simul_2q_complete{0}_subj{1}_param{2}'.format(self.complete*1, self.subj_idx, pram)
+		path  = 'subj{0}_simul{1}_2q_complete{2}_param{3}'.format(self.subj_idx, sim, self.complete*1, pram)
 		if self.leaky == 1:
 			path += '_leaky1'
 		elif self.leaky == 0:
 			path += '_leaky0'
 		if 'python' in formats:
 			pkl.dump(d, open(directory + path + '.pkl', 'wb'))
+		if 'matlab' in formats:
+			savemat(directory + path, d)
 		print('saved simulation. Path is {0}'.format(directory + path))
 
 	def save(self, directory='results/', formats=['python', 'matlab']):

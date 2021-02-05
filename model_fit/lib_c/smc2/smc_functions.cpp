@@ -143,9 +143,15 @@ namespace smc {
                         noise_level0 = 0.;
                         noise_level1 = 0.;
                     }
-
-                    *(Q_values + 2 * n_idx)     = distribution(generator) * noise_level0 + mu_0;
-                    *(Q_values + 2 * n_idx + 1) = distribution(generator) * noise_level1 + mu_1;
+					
+					// truncate Q values to 0 and 1
+					do{
+                    	*(Q_values + 2 * n_idx)     = distribution(generator) * noise_level0 + mu_0;
+					}while(*(Q_values + 2 * n_idx) < 0 || *(Q_values + 2 * n_idx) > 1);
+					
+					do{
+                    	*(Q_values + 2 * n_idx + 1) = distribution(generator) * noise_level1 + mu_1;
+					}while(*(Q_values + 2 * n_idx + 1) < 0 || *(Q_values + 2 * n_idx + 1) > 1);
 
 
                     if ((choices[t_idx]==1)&&apply_rep_bias&&(prev_act!=-1))
@@ -327,9 +333,15 @@ namespace smc {
                         noise_level0 = 0.;
                         noise_level1 = 0.;
                     }
-
-                    *(noisy_descendants + theta_idx * 2 * N_samples + 2 * n_idx)     = distribution(generator) * noise_level0 + mu_0;
-                    *(noisy_descendants + theta_idx * 2 * N_samples + 2 * n_idx + 1) = distribution(generator) * noise_level1 + mu_1;
+					
+					// truncate Q values
+					do{
+                    	*(noisy_descendants + theta_idx * 2 * N_samples + 2 * n_idx)     = distribution(generator) * noise_level0 + mu_0;
+					}while(*(noisy_descendants + theta_idx * 2 * N_samples + 2 * n_idx) < 0 || *(noisy_descendants + theta_idx * 2 * N_samples + 2 * n_idx) > 1);
+						
+					do{
+						*(noisy_descendants + theta_idx * 2 * N_samples + 2 * n_idx + 1) = distribution(generator) * noise_level1 + mu_1;
+					}while(*(noisy_descendants + theta_idx * 2 * N_samples + 2 * n_idx + 1) < 0 || *(noisy_descendants + theta_idx * 2 * N_samples + 2 * n_idx + 1) > 1);
 
                     if ((choices[t_idx]==1)&&apply_rep_bias&&(prev_act!=-1))
                     {

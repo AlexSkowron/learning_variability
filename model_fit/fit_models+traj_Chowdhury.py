@@ -3,15 +3,36 @@
 from smc_object import smc_object
 import pandas
 import numpy
+import os
 
+RootDir = '/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/'
+PayOffDir = '/Volumes/fb-lip/Projects/UCL_Chowdhury_RL/study_information/Payoff_prob/'
 DataPath = '/Volumes/fb-lip/Projects/UCL_Chowdhury_RL/BIDS/data/'
 
-ID = ['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32']
+ID = ['01']
+#['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32']
 
-drug_cond = ['placebo','ldopa']
+drug_cond = ['placebo']
+
+#drug_cond = ['placebo','ldopa']
+
+Nsim = 1;
+
+show_prg=True # show progress
+
+PayOffScheme=numpy.genfromtxt(PayOffDir + 'PayOff_scheme.csv', delimiter=',')
+
+if os.path.isdir(RootDir + 'model_fit/results/fit_Chowdhury_RL/') == 0:
+    os.mkdir(RootDir + 'model_fit/results/fit_Chowdhury_RL/')
+    
+if os.path.isdir(RootDir + 'model_fit/results/simulation/') == 0:
+    os.mkdir(RootDir + 'model_fit/results/simulation/')
 
 for sub in ID:
     for drug in drug_cond:
+        
+        if os.path.isdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/') == 0:
+            os.mkdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/')
 
         '''
         load data
@@ -23,12 +44,14 @@ for sub in ID:
         sub_ind = sub + '_' + drug
         
         actions = numpy.array(sub_data.action)
-        actions = actions[~numpy.isnan(actions)]
+        ac_nan_idx = numpy.isnan(actions)
+        actions = actions[~ac_nan_idx]
         actions = actions-1
         actions = actions.astype('uint8')
         
         rewards = numpy.array(sub_data.reward)
-        rewards = rewards[~numpy.isnan(rewards)]
+        rew_nan_idx = numpy.isnan(rewards)
+        rewards = rewards[~rew_nan_idx]
         
         rewards_reshape = numpy.zeros((2,len(rewards)))
         
@@ -36,6 +59,19 @@ for sub in ID:
             rewards_reshape[actions[i],i]=rewards[i]
         
         rewards_reshape = rewards_reshape.astype('float') # must be float!
+        
+        if drug == 'ldopa':
+            if PayOffScheme[0,ID.index(sub)]==2:
+                reward_probs=numpy.genfromtxt(PayOffDir + 'PayOff_R2.csv', delimiter=',') #experimental payoff scheme(s)
+            else:
+                reward_probs=numpy.genfromtxt(PayOffDir + 'PayOff_R3.csv', delimiter=',')
+        elif drug == 'placebo':
+            if PayOffScheme[1,ID.index(sub)]==2:
+                reward_probs=numpy.genfromtxt(PayOffDir + 'PayOff_R2.csv', delimiter=',') #experimental payoff scheme(s)
+            else:
+                reward_probs=numpy.genfromtxt(PayOffDir + 'PayOff_R3.csv', delimiter=',')
+                
+        reward_probs = reward_probs.astype('float')
         
         '''
         ---
@@ -53,7 +89,8 @@ for sub in ID:
         
         info = {'actions':actions, 'rewards':rewards_reshape, 'subject_idx':sub_ind}
         
-        s_obj = smc_object(info=info, complete = 0, leaky = 1)
+        c=0 # leaky par
+        l=1 # complete par
         
         '''
         ---- Infencence method ----
@@ -68,30 +105,228 @@ for sub in ID:
         This function generates the posterior of the parameters as well as the marginal likelihood (model evidence) estimator
         '''
         
-        # noisy RL model
-        s_obj.do_inference(noise=1, apply_rep = 0, apply_weber = 1, condition=1, beta_softmax=-1, show_progress=False)
-        s_obj.get_map()
+        # simulate rewards for recovery
+        rewards_sim=numpy.empty((2,reward_probs.shape[1]))
+        rewards_sim[:]=numpy.nan
+
+        for r in range(reward_probs.shape[1]):
+            
+            if rew_nan_idx[r]==False: # simulate the same nr of choices as subject 
+            
+                if numpy.random.rand() < reward_probs[0,r]:
+                    rewards_sim[0,r]=1
+                else: 
+                    rewards_sim[0,r]=0
+                
+                if numpy.random.rand() < reward_probs[1,r]:
+                    rewards_sim[1,r]=1
+                else: 
+                    rewards_sim[1,r]=0
         
-        s_obj.get_trajectory()
+        rewards_sim = rewards_sim[:,~numpy.isnan(rewards_sim[1,:])]
+        rewards_sim = rewards_sim.astype('float')
         
-        s_obj.save(directory='/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_fit/results/fit_Chowdhury_RL/')
+        # note: get traj not yet updated for task!!
         
-        # noisy RL model with perseveration
-        s_obj.do_inference(noise=1, apply_rep = 1, apply_weber = 1, condition=1, beta_softmax=-1, show_progress=False)
-        s_obj.get_map()
+        '''
+        ----noiseless RL model----
+        '''
         
-        s_obj.save(directory='/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_fit/results/fit_Chowdhury_RL/')
-        
-        # exact RL model with perseveration
-        s_obj.do_inference(noise=0, apply_rep = 1, apply_weber = 0, condition=0, beta_softmax=-1, show_progress=True)
+        s_obj = smc_object(info=info, complete = c, leaky = l)
+                
+        s_obj.do_inference(noise=0, apply_rep = 0, apply_weber = 0, condition=0, beta_softmax=-1, show_progress=show_prg)
         s_obj.get_map() 
         
-        s_obj.save(directory='/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_fit/results/fit_Chowdhury_RL/')
+        beta_sim = s_obj.map[s_obj.param_names.index('beta_softmax')] # save beta for later simulation
         
-        # exact RL model
-        s_obj.do_inference(noise=0, apply_rep = 0, apply_weber = 0, condition=0, beta_softmax=-1, show_progress=False)
+        s_obj.save(directory=RootDir + 'model_fit/results/fit_Chowdhury_RL/')
+        
+        #simulation
+        if os.path.isdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL/') == 0:
+            os.mkdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL/')
+        
+        sim_obj = s_obj
+        
+        sim_obj.simulate(true_rewards=rewards_sim)
+        sim_obj.save_simulation(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL/')
+        
+        # recovery
+        info_r = {'actions':sim_obj.actions_simul, 'rewards':sim_obj.rewards_simul, 'subject_idx':sub_ind + '_rec'}
+        
+        r_obj = smc_object(info=info_r, complete = c, leaky = l)
+        
+        r_obj.do_inference(noise=0, apply_rep = 0, apply_weber = 0, condition=0, beta_softmax=-1, show_progress=show_prg) # exact RL
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL/')
+        
+        pdb.set_trace()
+        
+        r_obj.do_inference(noise=1, apply_rep = 0, apply_weber = 1, condition=1, beta_softmax=3, show_progress=show_prg) # noisy RL argmax
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL/')
+        
+        r_obj.do_inference(noise=1, apply_rep = 0, apply_weber = 1, condition=1, beta_softmax=-1, show_progress=show_prg) # noisy RL softmax
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL/')
+        
+        del s_obj, sim_obj, r_obj, info_r
+        
+        '''
+        ----noisy RL model with argmax----
+        '''
+        
+        s_obj = smc_object(info=info, complete = c, leaky = l)
+        
+        s_obj.do_inference(noise=1, apply_rep = 0, apply_weber = 1, condition=1, beta_softmax=3, show_progress=show_prg)
+        s_obj.get_map()
+        
+        #s_obj.get_trajectory()
+        
+        ep_sim = s_obj.map[s_obj.param_names.index('epsilon')] # save epsilon for later simulation
+        
+        s_obj.save(directory=RootDir + 'model_fit/results/fit_Chowdhury_RL/')
+        
+        #simulation
+        if os.path.isdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_argmax/') == 0:
+            os.mkdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_argmax/')
+        
+        sim_obj = s_obj
+        
+        sim_obj.simulate(true_rewards=rewards_sim)
+        sim_obj.save_simulation(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_argmax/')
+        
+        # recovery
+        info_r = {'actions':sim_obj.actions_simul, 'rewards':sim_obj.rewards_simul, 'subject_idx':sub_ind + '_rec'}
+        
+        r_obj = smc_object(info=info_r, complete = c, leaky = l)
+        
+        r_obj.do_inference(noise=0, apply_rep = 0, apply_weber = 0, condition=0, beta_softmax=-1, show_progress=show_prg) # exact RL
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_argmax/')
+        
+        r_obj.do_inference(noise=1, apply_rep = 0, apply_weber = 1, condition=1, beta_softmax=3, show_progress=show_prg) # noisy RL argmax
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_argmax/')
+        
+        r_obj.do_inference(noise=1, apply_rep = 0, apply_weber = 1, condition=1, beta_softmax=-1, show_progress=show_prg) # noisy RL softmax
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_argmax/')
+        
+        del s_obj, sim_obj, r_obj, info_r
+        
+        '''
+        -----noisy RL model with softmax-----
+        '''
+        
+        s_obj = smc_object(info=info, complete = c, leaky = l)
+        
+        s_obj.do_inference(noise=1, apply_rep = 0, apply_weber = 1, condition=1, beta_softmax=-1, show_progress=show_prg)
+        s_obj.get_map()
+        
+        #s_obj.get_trajectory()
+        
+        s_obj.save(directory=RootDir + 'model_fit/results/fit_Chowdhury_RL/')
+        
+        #simulation
+        if os.path.isdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax/') == 0:
+            os.mkdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax/')
+        
+        sim_obj = s_obj
+        
+        #simulate noisyRL softmax with beta map from exact model and epsilon map from noisy RL argmax
+        sim_obj.map[s_obj.param_names.index('beta_softmax')]=beta_sim
+        sim_obj.map[s_obj.param_names.index('epsilon')]=ep_sim
+        
+        sim_obj.simulate(true_rewards=rewards_sim)
+        sim_obj.save_simulation(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax/')
+        
+        # recovery
+        info_r = {'actions':sim_obj.actions_simul, 'rewards':sim_obj.rewards_simul, 'subject_idx':sub_ind + '_rec'}
+        
+        r_obj = smc_object(info=info_r, complete = c, leaky = l)
+        
+        r_obj.do_inference(noise=0, apply_rep = 0, apply_weber = 0, condition=0, beta_softmax=-1, show_progress=show_prg) # exact RL
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax/')
+        
+        r_obj.do_inference(noise=1, apply_rep = 0, apply_weber = 1, condition=1, beta_softmax=3, show_progress=show_prg) # noisy RL argmax
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax/')
+        
+        r_obj.do_inference(noise=1, apply_rep = 0, apply_weber = 1, condition=1, beta_softmax=-1, show_progress=show_prg) # noisy RL softmax
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax/')
+        
+        del s_obj, sim_obj, r_obj, info_r
+        
+        '''
+        noisy RL model with perseveration
+        '''
+        s_obj = smc_object(info=info, complete = c, leaky = l)
+        
+        s_obj.do_inference(noise=1, apply_rep = 1, apply_weber = 1, condition=1, beta_softmax=-1, show_progress=show_prg)
+        s_obj.get_map()
+        
+        s_obj.save(directory=RootDir + 'model_fit/results/fit_Chowdhury_RL/')
+        
+        #simulation
+        if os.path.isdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax_rep/') == 0:
+            os.mkdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax_rep/')
+        
+        sim_obj = s_obj
+        
+        sim_obj.simulate(true_rewards=rewards_sim)
+        sim_obj.save_simulation(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax_rep/')
+        
+        # par recovery only
+        info_r = {'actions':sim_obj.actions_simul, 'rewards':sim_obj.rewards_simul, 'subject_idx':sub_ind + '_rec'}
+        
+        r_obj = smc_object(info=info_r, complete = c, leaky = l)
+        
+        r_obj.do_inference(noise=1, apply_rep = 1, apply_weber = 1, condition=1, beta_softmax=-1, show_progress=show_prg) # noisy RL softmax rep
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noisyRL_softmax_rep/')
+        
+        del s_obj, sim_obj, r_obj, info_r
+        
+        '''
+        exact RL model with perseveration
+        '''
+        
+        s_obj = smc_object(info=info, complete = c, leaky = l)
+        
+        s_obj.do_inference(noise=0, apply_rep = 1, apply_weber = 0, condition=0, beta_softmax=-1, show_progress=show_prg)
         s_obj.get_map() 
         
-        s_obj.save(directory='/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_fit/results/fit_Chowdhury_RL/')
+        s_obj.save(directory=RootDir + 'model_fit/results/fit_Chowdhury_RL/')
         
-        print('sub-' + sub + ' done')
+        #simulation
+        if os.path.isdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL_rep/') == 0:
+            os.mkdir(RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL_rep/')
+        
+        sim_obj = s_obj
+        
+        sim_obj.simulate(true_rewards=rewards_sim)
+        sim_obj.save_simulation(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL_rep/')
+        
+        # par recovery only
+        info_r = {'actions':sim_obj.actions_simul, 'rewards':sim_obj.rewards_simul, 'subject_idx':sub_ind + '_rec'}
+        
+        r_obj = smc_object(info=info_r, complete = c, leaky = l)
+        
+        r_obj.do_inference(noise=0, apply_rep = 1, apply_weber = 0, condition=0, beta_softmax=-1, show_progress=show_prg) # noiseless RL rep
+        r_obj.get_map()
+        
+        r_obj.save(directory=RootDir + 'model_fit/results/simulation/sub-' + sub + '_' + drug + '/noiselessRL_rep/')
+        
+        del s_obj, sim_obj, r_obj, info_r

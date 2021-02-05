@@ -52,9 +52,19 @@ def simulate_noisy_rl(rewards, complete, idx_blocks, choices, forced_actions, sa
 			if apply_observational_noise==0 and choices[t_idx - 1]==0:
 				noise_level0 = 0
 				noise_level1 = 0
-
-			noisy_trajectories[t_idx, 0] = mu0 + noise_level0 * np.random.normal()
-			noisy_trajectories[t_idx, 1] = mu1 + noise_level1 * np.random.normal()
+            
+            # truncate Q values between 0 and 1
+			while True:
+			    noisy_trajectories[t_idx, 0] = mu0 + noise_level0 * np.random.normal()
+			    
+			    if noisy_trajectories[t_idx, 0] > 0 and noisy_trajectories[t_idx, 0] < 1:
+			        break
+			
+			while True:
+			    noisy_trajectories[t_idx, 1] = mu1 + noise_level1 * np.random.normal()
+			    
+			    if noisy_trajectories[t_idx, 1] > 0 and noisy_trajectories[t_idx, 1] < 1:
+			        break
 
 			if choices[t_idx] == 1:
 				# probability to choose 1
