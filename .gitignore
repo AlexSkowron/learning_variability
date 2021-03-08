@@ -1,6 +1,11 @@
 results/
 plots/
 build/
+logs/
+sim_explore_logs/
 *.mat
 *.pyc
 *.so
+.DS_Store
+._*
+*~
