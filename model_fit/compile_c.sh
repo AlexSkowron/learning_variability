@@ -5,7 +5,7 @@
 ############################################################################################
 
 # path to boost library : TO BE MODIFIED BY USER
-path='/Users/skowron/Documents/Suboptimality_models/aging_learning_var/libraries/boost_1_59_0'
+path='/home/mpib/skowron/aging_learning_var/libraries/boost_1_59_0'
 
 # compilation 
 cd lib_c/smc2/

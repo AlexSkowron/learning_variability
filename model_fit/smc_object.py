@@ -100,7 +100,7 @@ class smc_object():
 		if not (self.complete == 0 and self.leaky == -1): # particular case of 2 alphas in the complete condition, todo : take out?
 			assert((self.leaky == -1) * (self.complete == 1) or (self.leaky != -1) * (self.complete == 0)), 'leaky can only be -1 in complete condition. In partial condition, the models to apply are leaky (1) (regress to mean) or counterfactual (0) (1 - r_obs)'
 
-	def do_inference(self, noise = 1, apply_rep = 0, apply_weber = 1, condition = 1, curiosity_bias = 0, beta_softmax=-1, show_progress = False, temperature = True):
+	def do_inference(self, noise = 1, apply_rep = 0, apply_weber = 1, condition = 1, curiosity_bias = 0, beta_softmax=-1, show_progress = False, temperature = True, alpha_unchosen=-1):
 		'''
 		---- Infencence method ----
 		Takes as parameters:
@@ -149,7 +149,7 @@ class smc_object():
 					self.idx_samples = 0
 		else:
 			if noise:
-				self.results     = smc2_2q_2alpha.smc2(self.actions, self.rewards, self.idx_blocks, self.choices, self.subj_idx, show_progress, apply_rep, apply_weber, beta_softmax, temperature, observational_noise)
+				self.results     = smc2_2q_2alpha.smc2(self.actions, self.rewards, self.idx_blocks, self.choices, self.subj_idx, show_progress, apply_rep, apply_weber, beta_softmax, temperature, observational_noise, alpha_unchosen)
 				self.param_names = ['alpha_chosen', 'alpha_unchosen', 'beta_softmax', 'epsilon'] + ['rep_bias'] * apply_rep
 				self.idx_weights = -3
 				self.idx_samples = 0
@@ -157,7 +157,7 @@ class smc_object():
 				if beta_softmax != -1:
 					raise NotImplementedError
 				else:
-					self.results     = ibis_2q_2alpha.ibis(self.actions, self.rewards, self.choices, self.idx_blocks, self.subj_idx, apply_rep, apply_weber_decision_noise, curiosity_bias, show_progress, temperature)
+					self.results     = ibis_2q_2alpha.ibis(self.actions, self.rewards, self.choices, self.idx_blocks, self.subj_idx, apply_rep, apply_weber_decision_noise, curiosity_bias, show_progress, temperature, alpha_unchosen)
 					self.param_names = ['alpha_chosen', 'alpha_unchosen', 'beta_softmax'] + ['rep_bias'] * apply_rep
 					self.idx_weights = -3
 					self.idx_samples = 0

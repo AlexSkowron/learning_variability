@@ -1,12 +1,14 @@
 import numpy as np
 from scipy.stats import gamma, norm, truncnorm, multivariate_normal
-import matplotlib.pyplot as plt
 from numpy.random import multivariate_normal as multi_norm
 from scipy.misc import logsumexp
 import sys
 sys.path.append("../useful_functions/")
 import useful_functions as uf
 
+import matplotlib
+matplotlib.use('agg') # make sure matplotlib backend is noninteractive on cluster
+import matplotlib.pyplot as plt
 
 def ibis(actions, rewards, choices, idx_blocks, subj_idx, apply_rep_bias, apply_weber_decision_noise, curiosity_bias, show_progress, temperature):
     

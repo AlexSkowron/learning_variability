@@ -1,14 +1,16 @@
 import numpy as np
 from scipy.stats import gamma, norm, truncnorm, multivariate_normal
-import matplotlib.pyplot as plt
 from numpy.random import multivariate_normal as multi_norm
 from scipy.misc import logsumexp
 import sys
 sys.path.append("../useful_functions/")
 import useful_functions as uf
 
+import matplotlib
+matplotlib.use('agg') # make sure matplotlib backend is noninteractive on cluster
+import matplotlib.pyplot as plt
 
-def ibis(actions, rewards, choices, idx_blocks, subj_idx, apply_rep_bias, apply_weber_decision_noise, curiosity_bias, show_progress, temperature):
+def ibis(actions, rewards, choices, idx_blocks, subj_idx, apply_rep_bias, apply_weber_decision_noise, curiosity_bias, show_progress, temperature, alpha_unchosen):
     
     assert(2 not in actions); assert(0 in actions); assert(1 in actions)
 
@@ -30,6 +32,7 @@ def ibis(actions, rewards, choices, idx_blocks, subj_idx, apply_rep_bias, apply_
             upp_bound_beta     = 2.
         samples[:, 2]          = np.random.rand(nb_samples) * upp_bound_beta
         samples[:, 3]          = upp_bound_eta * (np.random.rand(nb_samples) * 2. - 1.)
+        
     elif apply_weber_decision_noise == 0:
         samples                = np.random.rand(nb_samples, 3) 
         if temperature:
@@ -59,8 +62,12 @@ def ibis(actions, rewards, choices, idx_blocks, subj_idx, apply_rep_bias, apply_
         samples[:, 2]          = np.random.rand(nb_samples) * upp_bound_beta # bound on the beta 
         samples[:, 3]          = np.random.rand(nb_samples) * upp_bound_k
 
-
-
+    if alpha_unchosen >= 0 and alpha_unchosen <= 1:
+        samples[:,1]        = alpha_unchosen
+        sample_alpha_u      = False
+    else:
+        sample_alpha_u      = True
+    
     Q_samples              = np.zeros([nb_samples, 2])
     prev_action            = np.zeros(nb_samples) - 1
 
@@ -192,37 +199,52 @@ def ibis(actions, rewards, choices, idx_blocks, subj_idx, apply_rep_bias, apply_
 
         # move step
         if ess < coefficient * nb_samples:
-            idxTrajectories = uf.stratified_resampling(weights_a)
-            mu_p            = np.sum(samples.T * weights_a, axis=1)
-            Sigma_p         = np.dot((samples - mu_p).T * weights_a, (samples - mu_p))
             nb_acceptance   = 0.
-
+            if not sample_alpha_u:
+            	samples_tmp = np.delete(samples, 1, axis=1)
+            	mu_p        = np.sum(samples_tmp.T * weights_a, axis=1)
+            	Sigma_p     = np.dot((samples_tmp - mu_p).T * weights_a, (samples_tmp - mu_p))
+            else:
+            	mu_p        = np.sum(samples.T * weights_a, axis=1)
+            	Sigma_p     = np.dot((samples - mu_p).T * weights_a, (samples - mu_p))
+            
+            idxTrajectories = uf.stratified_resampling(weights_a)
+            
             for n_idx in range(nb_samples):
                 idx_traj = idxTrajectories[n_idx]
                 while True:
-                    sample_p = multi_norm(mu_p, Sigma_p)
+                    sample_cand     = np.array(samples[idx_traj])
+                    sample_p        = multi_norm(mu_p, Sigma_p)
+                    sample_p_copy   = np.array(sample_p)
+                    if (not sample_alpha_u) and apply_rep_bias:
+                    	sample_p    = np.array([sample_p[0], alpha_unchosen, sample_p[1], sample_p[2]])
+                    	sample_cand = np.delete(sample_cand, 1)
+                    elif not sample_alpha_u:
+                    	sample_p    = np.array([sample_p[0], alpha_unchosen, sample_p[1]])
+                    	sample_cand = np.delete(sample_cand, 1)
+                    
                     if not apply_rep_bias and not apply_weber_decision_noise:  
-                        if sample_p[0] > 0 and sample_p[0] < 1 and sample_p[1] > 0 and sample_p[1] < 1 and sample_p[2] > 0 and sample_p[2] <= upp_bound_beta:
+                        if sample_p[0] >= 0 and sample_p[0] <= 1 and sample_p[1] >= 0 and sample_p[1] <= 1 and sample_p[2] > 0 and sample_p[2] <= upp_bound_beta:
                             break
                     elif not apply_rep_bias and apply_weber_decision_noise:
-                        if sample_p[0] > 0 and sample_p[0] < 1 and sample_p[1] > 0 and sample_p[1] < 1 \
+                        if sample_p[0] >= 0 and sample_p[0] <= 1 and sample_p[1] >= 0 and sample_p[1] <= 1 \
                                 and sample_p[2] > 0 and sample_p[2] <= upp_bound_beta and sample_p[3] > 0 and sample_p[3] <= upp_bound_k:
                             break
                     elif apply_rep_bias and not apply_weber_decision_noise:
-                        if sample_p[0] > 0 and sample_p[0] < 1 and sample_p[1] > 0 and sample_p[1] < 1 \
+                        if sample_p[0] >= 0 and sample_p[0] <= 1 and sample_p[1] >= 0 and sample_p[1] <= 1 \
                                      and sample_p[2] > 0 and sample_p[2] <= upp_bound_beta and sample_p[3] > -upp_bound_eta and sample_p[3] < upp_bound_eta:
                             break
                     else:
-                        if sample_p[0] > 0 and sample_p[0] < 1 and sample_p[1] > 0 and sample_p[1] < 1 \
+                        if sample_p[0] >= 0 and sample_p[0] <= 1 and sample_p[1] >= 0 and sample_p[1] <= 1 \
                                      and sample_p[2] > 0 and sample_p[2] <= upp_bound_beta and sample_p[3] > 0 and sample_p[3] < upp_bound_k \
                                              and sample_p[-1] > -upp_bound_eta and sample_p[-1] < upp_bound_eta:                        
                             break
-
+            
                 [loglkd_prop, Q_prop, prev_action_prop, prediction_err_prop] = get_loglikelihood(sample_p, rewards, actions, choices, idx_blocks, t_idx + 1, apply_rep_bias, apply_weber_decision_noise, curiosity_bias, temperature) 
+            
+            	log_ratio                               = loglkd_prop - p_loglkd[idx_traj]  \
+													         + get_logtruncnorm(sample_cand, mu_p, Sigma_p) - get_logtruncnorm(sample_p_copy, mu_p, Sigma_p)
                 
-                log_ratio                               = loglkd_prop - p_loglkd[idx_traj] \
-                                                             + get_logtruncnorm(samples[idx_traj], mu_p, Sigma_p) - get_logtruncnorm(sample_p, mu_p, Sigma_p)
-
                 log_ratio = np.minimum(log_ratio, 0)
                 if (np.log(np.random.rand()) < log_ratio):
                     nb_acceptance          += 1.

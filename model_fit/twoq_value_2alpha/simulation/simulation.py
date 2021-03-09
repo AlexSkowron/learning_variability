@@ -1,10 +1,13 @@
 import numpy as np
 from scipy.stats import gamma, norm
-import matplotlib.pyplot as plt
 import sys
 sys.path.append("../useful_functions/")
 import useful_functions as uf
 import warnings
+
+import matplotlib
+matplotlib.use('agg') # make sure matplotlib backend is noninteractive on cluster
+import matplotlib.pyplot as plt
 
 # simulate RL model with learning variability
 def simulate_noisy_rl(rewards, complete, idx_blocks, choices, forced_actions, sample, apply_rep_bias, apply_weber, apply_observational_noise):

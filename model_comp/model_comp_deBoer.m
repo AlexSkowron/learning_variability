@@ -3,17 +3,27 @@ clear all
 
 addpath(genpath('/Users/skowron/Documents/MATLAB/VBA-toolbox-master'))
 
-model_path='/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_fit/results/fit_deBoer_RL_leaky1/';
+model_path='/Users/skowron/Volumes/tardis/skowron/aging_learning_var/learning_variability/model_fit/results/fit_deBoer_RL_weber0/';
 
 %deBoer data
-load('/Volumes/fb-lip/user/Alexander/Lieke_bandit_data/TAB_for_Alex.mat','subjects','group')
+load('/Users/skowron/Volumes/tardis/skowron/deBoer_RL/TAB_for_Alex2.mat','subjects','group')
 
 ID_OA = cellfun(@(x) [x '_OA'],subjects(group==2),'UniformOutput',false);
 ID_YA = cellfun(@(x) [x '_YA'],subjects(group==1),'UniformOutput',false);
 
-model_ID = {'param00001','param00101','param11011','param11111'}; % standard RL, RL with perseveration, noisy RL, noisy RL with perseveration
+%remove excluded OA subjects
+outOA=[find(strcmp(ID_OA,'dad11_OA')), find(strcmp(ID_OA,'dad31_OA')), find(strcmp(ID_OA,'dad26_OA'))];
+ID_OA(outOA)=[];
+
+model_ID = {'param01010','param01011','param01111'}; % noiselessRL, noiselessRL with perseveration, noisyRL argmax, noisyRL softmax, noisy RL with perseveration
+
+ResultPath = '/Users/skowron/Volumes/tardis/skowron/aging_learning_var/learning_variability/model_comp/results/';
 
 load('/Volumes/fb-lip/user/Alexander/Lieke_bandit_data/Ntrials.mat','Ntrials_YA','Ntrials_OA')
+Ntrials_OA(outOA)=[];
+
+
+%%
 
 for age_gr = 1:2 % perform model comparison for each age group
 
@@ -34,16 +44,17 @@ Evidences=zeros(length(model_ID)+1,length(ID)); % models +1 for guessing model, 
 
 par_RL=zeros(length(ID),3);
 par_RL_rep=zeros(length(ID),4);
+par_RL_noisy_argmax=zeros(length(ID),3);
 par_RL_noisy=zeros(length(ID),4);
 par_RL_noisy_rep=zeros(length(ID),5);
 
 cd(model_path)
 
 %% get data
-for sub = 1:length(ID) 
+for sub = 1:length(ID)
     for model = 1:length(model_ID)
         
-        load(['2q_complete0_subj' ID{sub} '_resInf1_map1_traj1_simul0_' model_ID{model} '_leaky1.mat'],'results','map')
+        load(['2q_complete0_subj' ID{sub} '_resInf1_map1_traj0_simul0_' model_ID{model} '_leaky1.mat'],'results','map')
 
         Evidences(model,sub)=results{end}(end);
         clear results
@@ -52,9 +63,11 @@ for sub = 1:length(ID)
             par_RL(sub,:)=map;
         elseif strcmp(model_ID{model},'param00101')
             par_RL_rep(sub,:)=map;
-        elseif strcmp(model_ID{model},'param11011')
+        elseif strcmp(model_ID{model},'param01010')
+            par_RL_noisy_argmax(sub,:)=map([1:2,4]);
+        elseif strcmp(model_ID{model},'param01011')
             par_RL_noisy(sub,:)=map;
-        elseif strcmp(model_ID{model},'param11111')
+        elseif strcmp(model_ID{model},'param01111')
             par_RL_noisy_rep(sub,:)=map;
         else
             assert(0,'error in map allocation')
@@ -67,7 +80,7 @@ end
 Evidences(end,:)=Ntrials*log(0.5);
 
 % save evidences
-save(['/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_comp/results/Evidences+pars_' gr_label],'Evidences','par_RL','par_RL_rep','par_RL_noisy','par_RL_noisy_rep')
+save([ResultPath 'Evidences_param_deBoer_' gr_label '_weber0'],'Evidences','par_RL','par_RL_rep','par_RL_noisy','par_RL_noisy_rep')
 
 %% FFX analysis
 
@@ -118,16 +131,16 @@ pause
 
 % --subject exclusion--
 % Mark subjects where chance model fit best (excluded from analysis)
-sam_ind=~(maxE==5); % 1 subj OA, 5 subj YA
+sam_ind=~(maxE==6); % 5
 
 %subset
-Evidences_sam=Evidences(1:4,sam_ind); % evidences for final sample!
+Evidences_sam=Evidences(1:5,sam_ind); % evidences for final sample!
 
 %save
-save(['/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_comp/results/Evidences+pars_' gr_label],'Evidences_sam','sam_ind','-append')
+save([ResultPath 'Evidences_param_deBoer_' gr_label],'Evidences_sam','sam_ind','-append')
 
 % compare model evidences
-mod_leg={'RL' 'RL+rep' 'noisy RL' 'noisy RL+rep'};
+mod_leg={'RL' 'RL+rep' 'noisy RL argmax' 'noisy RL softmax' 'noisy RL+rep'};
 
 % sort evidences for plotting
 sortE=[Evidences_sam(:,maxE(sam_ind)==3) Evidences_sam(:,maxE(sam_ind)==2) Evidences_sam(:,maxE(sam_ind)==4) Evidences_sam(:,maxE(sam_ind)==1)];
@@ -221,7 +234,12 @@ pause
 % [posterior_ldopa,out_ldopa] = VBA_groupBMC(Evidences(:,:,2));
 % pause
 
-[posterior_cond_sam,out_cond_sam] = VBA_groupBMC(Evidences_sam);
+options.families = {[1:2], [3:5]}; % model families: noisy vs exact RL
+[posterior_cond,out_cond] = VBA_groupBMC(Evidences(1:4,:),options);
+
+[posterior_cond,out_cond] = VBA_groupBMC(Ea,options);
+
+%[posterior_cond_sam,out_cond_sam] = VBA_groupBMC_btwGroups({EvidencesYA, EvidencesOA},options);
 
 pause
 
@@ -332,7 +350,7 @@ OA_RFX_max2=RFX_max2;
 OA_maxE=maxE;
 clear par_RL_noisy_rep sam_ind_RFX Evidences RFX_max maxE par_RL_noisy par_RL_rep RFX_max2
 
-load('Evidences+pars_YA.mat','par_RL_rep','par_RL_noisy_rep','par_RL_noisy','sam_ind_RFX','RFX_max2','RFX_max','maxE','Evidences')
+load([ResultPath 'Evidences_param_deBoer_YA.mat'],'par_RL_rep','par_RL_noisy_rep','par_RL_noisy','sam_ind_RFX','RFX_max2','RFX_max','maxE','Evidences')
 YA_par_RL_noisy_rep=par_RL_noisy_rep;
 YA_par_RL_noisy=par_RL_noisy;
 YA_par_RL_rep=par_RL_rep;

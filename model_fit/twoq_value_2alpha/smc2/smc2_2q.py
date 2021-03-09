@@ -4,14 +4,17 @@ from scipy.stats import beta as beta_rv
 import sys
 sys.path.append("../../lib_c/")
 from smc2 import smc_c
-import matplotlib.pyplot as plt
 import time
 from numpy.random import multivariate_normal as multi_norm
 from scipy.misc import logsumexp
 sys.path.append("../useful_functions/")
 import useful_functions as uf
 
-def smc2(actions, rewards, idx_blocks, choices, subj_idx, show_progress, apply_rep, apply_weber, beta_softmax, temperature, observational_noise):
+import matplotlib
+matplotlib.use('agg') # make sure matplotlib backend is noninteractive on cluster
+import matplotlib.pyplot as plt
+
+def smc2(actions, rewards, idx_blocks, choices, subj_idx, show_progress, apply_rep, apply_weber, beta_softmax, temperature, observational_noise, alpha_unchosen):
 	
 	assert(2 not in actions); assert(0 in actions); assert(1 in actions); assert(apply_rep==0 or apply_rep==1); assert(apply_weber==0 or apply_weber==1)
 
@@ -52,8 +55,14 @@ def smc2(actions, rewards, idx_blocks, choices, subj_idx, show_progress, apply_r
 	samples[:,3]           = np.random.rand(n_theta) * upp_bound_eps
 	if apply_rep:
 		samples[:, 4]      = (2 * np.random.rand(n_theta) - 1) * upp_bound_eta
-
-	# variable memory
+	
+	if alpha_unchosen >= 0 and alpha_unchosen <= 1:
+	    samples[:,1]        = alpha_unchosen
+	    sample_alpha_u      = False
+	else:
+	    sample_alpha_u      = True
+	
+    # variable memory
 	noisy_descendants = np.zeros([n_theta, N_samples, 2])
 	noisy_ancestors   = np.zeros([n_theta, N_samples, 2])
 	weights_norm      = np.zeros([n_theta, N_samples])
@@ -111,13 +120,21 @@ def smc2(actions, rewards, idx_blocks, choices, subj_idx, show_progress, apply_r
 		if (essList[t_idx] < coefficient * n_theta):
 			acceptance_proba = 0
 			if not sample_beta:
-				samples_tmp = np.delete(samples, 2, axis=1)
-				mu_p        = np.sum(samples_tmp.T * normalisedThetaWeights, axis=1)
-				Sigma_p     = np.dot((samples_tmp - mu_p).T * normalisedThetaWeights, (samples_tmp - mu_p))
+			    samples_tmp = np.delete(samples, 2, axis=1)
+			    mu_p        = np.sum(samples_tmp.T * normalisedThetaWeights, axis=1)
+			    Sigma_p     = np.dot((samples_tmp - mu_p).T * normalisedThetaWeights, (samples_tmp - mu_p))
+			elif not sample_alpha_u:
+			    samples_tmp = np.delete(samples, 1, axis=1)
+			    mu_p        = np.sum(samples_tmp.T * normalisedThetaWeights, axis=1)
+			    Sigma_p     = np.dot((samples_tmp - mu_p).T * normalisedThetaWeights, (samples_tmp - mu_p))
+			elif (not sample_alpha_u) and (not sample_beta):
+			    samples_tmp = np.delete(samples, [1,2], axis=1)
+			    mu_p        = np.sum(samples_tmp.T * normalisedThetaWeights, axis=1)
+			    Sigma_p     = np.dot((samples_tmp - mu_p).T * normalisedThetaWeights, (samples_tmp - mu_p))
 			else:
-				mu_p        = np.sum(samples.T * normalisedThetaWeights, axis=1)
-				Sigma_p     = np.dot((samples - mu_p).T * normalisedThetaWeights, (samples - mu_p))
-
+			    mu_p        = np.sum(samples.T * normalisedThetaWeights, axis=1)
+			    Sigma_p     = np.dot((samples - mu_p).T * normalisedThetaWeights, (samples - mu_p))
+			
 			ancestorsIndexes[:] = uf.stratified_resampling(normalisedThetaWeights)
 
 			for theta_idx in range(n_theta):
@@ -126,19 +143,32 @@ def smc2(actions, rewards, idx_blocks, choices, subj_idx, show_progress, apply_r
 					sample_cand     = np.array(samples[idx_traj])
 					sample_p        = multi_norm(mu_p, Sigma_p)
 					sample_p_copy   = np.array(sample_p)
+					
 					if (not sample_beta) and apply_rep:
 						sample_p    = np.array([sample_p[0], sample_p[1], beta_softmax, sample_p[2], sample_p[3]])
 						sample_cand = np.delete(sample_cand, 2)
 					elif not sample_beta:
 						sample_p    = np.array([sample_p[0], sample_p[1], beta_softmax, sample_p[2]])
 						sample_cand = np.delete(sample_cand, 2)
-
+					elif (not sample_alpha_u) and apply_rep:
+						sample_p    = np.array([sample_p[0], alpha_unchosen, sample_p[1], sample_p[2], sample_p[3]])
+						sample_cand = np.delete(sample_cand, 1)
+					elif (not sample_alpha_u):
+						sample_p    = np.array([sample_p[0], alpha_unchosen, sample_p[1], sample_p[2]])
+						sample_cand = np.delete(sample_cand, 1)
+					elif (not sample_alpha_u) and (not sample_beta) and apply_rep:
+						sample_p    = np.array([sample_p[0], alpha_unchosen, beta_softmax, sample_p[1]])
+						sample_cand = np.delete(sample_cand, [1,2])
+					elif (not sample_alpha_u) and (not sample_beta):
+						sample_p    = np.array([sample_p[0], alpha_unchosen, beta_softmax])
+						sample_cand = np.delete(sample_cand, [1,2])
+					
 					if apply_rep:
-						if sample_p[0] > 0 and sample_p[0] < 1 and sample_p[1] > 0 and sample_p[1] < 1. and sample_p[2] > 0 and sample_p[2] <= upp_bound_beta \
+						if sample_p[0] >= 0 and sample_p[0] <= 1 and sample_p[1] >= 0 and sample_p[1] <= 1. and sample_p[2] > 0 and sample_p[2] <= upp_bound_beta \
 														and sample_p[3] > 0 and sample_p[3] < upp_bound_eps and sample_p[4] > -upp_bound_eta and sample_p[4] < upp_bound_eta:
 							break
 					else:
-						if sample_p[0] > 0 and sample_p[0] < 1 and sample_p[1] > 0 and sample_p[1] < 1. and sample_p[2] > 0 and sample_p[2] <= upp_bound_beta \
+						if sample_p[0] >= 0 and sample_p[0] <= 1 and sample_p[1] >= 0 and sample_p[1] <= 1. and sample_p[2] > 0 and sample_p[2] <= upp_bound_beta \
 														and sample_p[3] > 0 and sample_p[3] < upp_bound_eps:
 							break
 

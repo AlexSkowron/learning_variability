@@ -6,9 +6,13 @@ import math
 import operator
 import functools
 from scipy.stats import beta as betalib
-import matplotlib.pyplot as plt
 from scipy.special import gammaln
 from scipy.stats import gamma, norm, invgamma
+
+import matplotlib
+matplotlib.use('agg') # make sure matplotlib backend is noninteractive on cluster
+import matplotlib.pyplot as plt
+
 
 # Gamma pdf with parameters alpha, and an intensity parameter beta
 def sample_gamma(alpha, beta, numberOfSamples=1, plot=False):

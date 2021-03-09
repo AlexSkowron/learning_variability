@@ -3,20 +3,23 @@ clear all
 
 addpath(genpath('/Users/skowron/Documents/MATLAB/VBA-toolbox-master'))
 
-model_path='/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_fit/results/fit_Chowdhury_RL_leaky1/';
+model_path='/Users/skowron/Volumes/tardis/skowron/aging_learning_var/learning_variability/model_fit/results/fit_Chowdhury_RL_weber0/';
 
 %Chowdhury data
 ID = {'01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32'};
 
 drug_cond = {'placebo','ldopa'};
 
-model_ID = {'param00001','param00101','param11011','param11111'}; % standard RL, RL with perseveration, noisy RL, noisy RL with perseveration
+model_ID = {'param01010','param01011','param01111'}; % noiselessRL, noiselessRL with perseveration, noisyRL argmax, noisyRL softmax, noisy RL with perseveration
+
+ResultPath = '/Users/skowron/Volumes/tardis/skowron/aging_learning_var/learning_variability/model_comp/results/';
 
 % prepare output mat
 Evidences=zeros(length(model_ID)+1,length(ID),length(drug_cond)); % models +1 for guessing model, see below
 
 par_RL=zeros(length(ID),3,length(drug_cond));
 par_RL_rep=zeros(length(ID),4,length(drug_cond));
+par_RL_noisy_argmax=zeros(length(ID),3,length(drug_cond));
 par_RL_noisy=zeros(length(ID),4,length(drug_cond));
 par_RL_noisy_rep=zeros(length(ID),5,length(drug_cond));
 
@@ -28,7 +31,7 @@ for sub = 1:length(ID)
    for drug = 1:length(drug_cond)      
         for model = 1:length(model_ID)
         
-            load(['2q_complete0_subj' ID{sub} '_' drug_cond{drug} '_resInf1_map1_traj1_simul0_' model_ID{model} '_leaky1.mat'],'results','map')
+            load(['2q_complete0_subj' ID{sub} '_' drug_cond{drug} '_resInf1_map1_traj0_simul0_' model_ID{model} '_leaky1.mat'],'results','map')
             
             Evidences(model,sub,drug)=results{end}(end);
             clear results
@@ -37,12 +40,14 @@ for sub = 1:length(ID)
                 par_RL(sub,:,drug)=map;
             elseif strcmp(model_ID{model},'param00101')
                 par_RL_rep(sub,:,drug)=map;
-            elseif strcmp(model_ID{model},'param11011')
+            elseif strcmp(model_ID{model},'param01010')
+                par_RL_noisy_argmax(sub,:,drug)=map([1:2,4]);
+            elseif strcmp(model_ID{model},'param01011')
                 par_RL_noisy(sub,:,drug)=map;
-            elseif strcmp(model_ID{model},'param11111')
+            elseif strcmp(model_ID{model},'param01111')
                 par_RL_noisy_rep(sub,:,drug)=map;
             else
-                fprintf('error in map allocation\n')
+                assert(0,'error in map allocation')
             end
             
         end
@@ -51,13 +56,13 @@ for sub = 1:length(ID)
 end
 
 %% include model that assumes random guessing strategy
-load('/Volumes/fb-lip/Projects/UCL_Chowdhury_RL/data/behaviour/beh_data/beh_data.mat','Ntrials_placebo','Ntrials_ldopa')
+load('/Users/skowron/Volumes/tardis/skowron/UCL_Chowdhury_RL/data/behaviour/beh_data/beh_data.mat','Ntrials_placebo','Ntrials_ldopa')
 
 Evidences(end,:,1)=cell2mat(Ntrials_placebo)*log(0.5); % placebo cond
 Evidences(end,:,2)=cell2mat(Ntrials_ldopa)*log(0.5); % ldopa cond
 
 % save evidences
-save('/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_comp/results/Evidences+pars','Evidences','par_RL','par_RL_rep','par_RL_noisy','par_RL_noisy_rep')
+save([ResultPath 'Evidences_param_Chowdhury_weber0.mat'],'Evidences','par_RL','par_RL_rep','par_RL_noisy_argmax','par_RL_noisy','par_RL_noisy_rep')
 
 %% FFX analysis
 
@@ -104,9 +109,9 @@ plot(sum(Evidences,3),'bo','MarkerSize',5)
 title('Log evidence all')
 xlabel('Model')
 
-% compare model parameters on best fitting model (model 4 - noisy RL with pers)
+% compare model parameters on noisyRL softmax
 
-for i = 1:length(model_ID)
+for i = 1:size(par_RL_noisy_rep,2)
     histogram(par_RL_noisy_rep(:,i,2)-par_RL_noisy_rep(:,i,1))
     [h,p]=ttest(par_RL_noisy_rep(:,i,2)-par_RL_noisy_rep(:,i,1))
     pause
@@ -165,12 +170,12 @@ pause
 
 % --subject exclusion--
 % Mark subjects where chance model fit best in either condition (excluded from analysis)
-sam_ind=~(maxE_ldopa==5|maxE_plac==5); % 6
+sam_ind=~(maxE_ldopa==6|maxE_plac==6); % 6
 
 %subset
-Evidences_sam=Evidences(1:4,sam_ind,:); % evidences for final sample!
+Evidences_sam=Evidences(1:5,sam_ind,:); % evidences for final sample!
 
-save('/Users/skowron/Documents/Suboptimality_models/aging_learning_var/learning_variability/model_comp/results/Evidences+pars','Evidences_sam','sam_ind','-append')
+save([ResultPath 'Evidences_param_Chowdhury.mat'],'Evidences_sam','sam_ind','-append')
 
 % get model consistency
 con=maxE_plac(sam_ind)==maxE_ldopa(sam_ind); % only 13 subjects show model consistency across conditions
@@ -200,7 +205,7 @@ xlabel('drug cond')
 pause
 
 % compare model evidences for each condition
-mod_leg={'RL' 'RL+rep' 'noisy RL' 'noisy RL+rep'};
+mod_leg={'RL' 'RL+rep' 'noisy RL argmax' 'noisy RL softmax' 'noisy RL+rep'};
 
 %placebo
 
@@ -346,8 +351,11 @@ xlim([-40,40])
 % pause
 % [posterior_ldopa,out_ldopa] = VBA_groupBMC(Evidences(:,:,2));
 % pause
-[posterior_cond_sam,out_cond_sam] = VBA_groupBMC_btwConds(Evidences_sam);
 
+options.families = {[1:2], [3:5]}; % model families: noisy vs exact RL
+[posterior_cond_sam,out_cond_sam] = VBA_groupBMC_btwConds(Evidences(1:5,:,:),options);
+
+[posterior_cond_sam,out_cond_sam] = VBA_groupBMC_btwConds(Ea(:,:,:),options);
 
 pause
 
